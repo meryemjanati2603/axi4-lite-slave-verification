@@ -1,7 +1,7 @@
 # Esclave AXI4-Lite : conception et vérification
 
-Un périphérique **esclave AXI4-Lite** avec quatre registres, décrit en Verilog et en VHDL, et deux environnements
-de vérification : un en SystemVerilog (à classes) et un en VHDL-2008.
+Un périphérique **esclave AXI4-Lite** avec quatre registres, décrit en Verilog et en VHDL, et trois environnements
+de vérification : un en **UVM**, un en SystemVerilog (à classes) et un en VHDL-2008.
 
 ## Le circuit
 
@@ -20,6 +20,7 @@ de vérification : un en SystemVerilog (à classes) et un en VHDL-2008.
 
 ```
 verilog_sv/   circuit en Verilog + banc de test SystemVerilog à classes (Vivado xsim)
+uvm/          environnement UVM (agent, driver, moniteur, scoreboard, séquences) pour le même circuit (Vivado xsim)
 vhdl/         circuit en VHDL + banc de test VHDL-2008 (GHDL, simulateur libre)
 ```
 
@@ -82,6 +83,12 @@ La contrainte des adresses invalides a ensuite été corrigée (voir ci-dessous)
 4 registres peut être générée, y compris `0x01` à `0x0F`. La version actuelle, avec couverture et cette
 correction, n'a pas encore été relancée sous Vivado.
 
+## Vérification UVM (Vivado)
+
+Le dossier `uvm/` contient un environnement de vérification avec la bibliothèque UVM : séquences (dirigée puis
+aléatoire contrainte), driver, moniteur, scoreboard avec modèle de référence, agent, environnement et test.
+Voir `uvm/README.md` pour le détail et pour la commande de lancement.
+
 ## Limites connues
 
 - Pas de synthèse ni d'essai sur FPGA : le projet est vérifié en simulation uniquement.
@@ -90,5 +97,6 @@ correction, n'a pas encore été relancée sous Vivado.
 - La couverture du banc SystemVerilog n'a pas encore été mesurée sur la version actuelle. Avant la correction de la
   contrainte d'adresses (`addr >= 8'h10`, qui ne produisait jamais `0x01` à `0x0F`), le bin `invalide_bas` ne pouvait
   pas être atteint ; le banc VHDL génère ces adresses et atteint 100 %.
-- Pas d'assertions SVA dans la version SystemVerilog (les assertions de protocole sont dans le banc VHDL).
+- Pas d'assertions SVA dans les versions SystemVerilog et UVM (les assertions de protocole sont dans le banc VHDL).
+- L'environnement UVM ne contient pas de classe de couverture fonctionnelle.
 - Le driver lance une seule transaction à la fois : une écriture et une lecture simultanées ne sont pas testées.
