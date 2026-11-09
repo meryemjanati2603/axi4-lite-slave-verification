@@ -19,8 +19,9 @@ de vérification : un en **UVM**, un en SystemVerilog (à classes) et un en VHDL
 ## Organisation
 
 ```
-verilog_sv/   circuit en Verilog + banc de test SystemVerilog à classes (Vivado xsim)
+verilog_sv/   circuit en Verilog + banc de test SystemVerilog à classes (Vivado xsim) + assertions SVA (`axi_sva.sv`)
 uvm/          environnement UVM (agent, driver, moniteur, scoreboard, séquences) pour le même circuit (Vivado xsim)
+sva_check/    vérification des assertions seules avec Verilator 5, et 6 bugs injectés
 vhdl/         circuit en VHDL + banc de test VHDL-2008 (GHDL, simulateur libre)
 ```
 
@@ -89,6 +90,37 @@ Le dossier `uvm/` contient un environnement de vérification avec la bibliothèq
 aléatoire contrainte), driver, moniteur, scoreboard avec modèle de référence, agent, environnement et test.
 Voir `uvm/README.md` pour le détail et pour la commande de lancement.
 
+## Assertions SVA (protocole AXI4-Lite)
+
+Le module `verilog_sv/axi_sva.sv` surveille le bus pendant toute la simulation. Il contient 11 assertions : 8 règles que
+doit respecter le circuit et 3 règles que doit respecter le maître (donc le driver du banc).
+
+| Assertion | Règle |
+|---|---|
+| A1, A2 | `BVALID` (puis `RVALID`) reste à 1 avec la même réponse et les mêmes données tant que `BREADY` (puis `RREADY`) n'a pas répondu |
+| A3, A4 | seuls OKAY et SLVERR sont permis : jamais EXOKAY ni DECERR |
+| A5, A6 | la réponse B (puis R) arrive au cycle qui suit l'écriture (puis l'adresse de lecture) acceptée |
+| A7 | aucune valeur inconnue (X) sur les sorties de handshake |
+| A8 | pendant le reset, `BVALID` et `RVALID` retombent |
+| A9, A10, A11 | le maître garde `AWADDR`, `WDATA`/`WSTRB`, `ARADDR` stables tant que le circuit n'a pas répondu |
+
+Elles sont vérifiées avec **Verilator 5** (outil libre), dans le dossier `sva_check/` : un banc minimal sans classes, puis
+6 bugs injectés un par un dans le circuit. Résultat : **6 sur 6 détectés par l'assertion prévue**. Sur le circuit
+correct : 0 violation, et les compteurs montrent que les règles ont vraiment été exercées (réponses retenues par
+`BREADY`/`RREADY`, attentes sur AW, W et AR).
+
+```
+cd sva_check
+sh run_sva.sh            # circuit correct : 0 violation
+python3 run_mutants.py   # 6 bugs injectés : 6 détectés
+```
+
+Pour brancher les assertions dans le banc à classes ou dans l'environnement UVM, il suffit d'instancier le module dans
+le `top` (mêmes noms de signaux que le circuit, via l'interface `vif`) et de lancer `xvlog` avec `axi_sva.sv` en plus.
+**Ce branchement n'a pas été essayé sous Vivado xsim.**
+
+Non vérifié : A7 et A8 n'ont pas de bug injecté (le banc minimal ne refait pas de reset en cours de route).
+
 ## Limites connues
 
 - Pas de synthèse ni d'essai sur FPGA : le projet est vérifié en simulation uniquement.
@@ -97,6 +129,6 @@ Voir `uvm/README.md` pour le détail et pour la commande de lancement.
 - La couverture du banc SystemVerilog n'a pas encore été mesurée sur la version actuelle. Avant la correction de la
   contrainte d'adresses (`addr >= 8'h10`, qui ne produisait jamais `0x01` à `0x0F`), le bin `invalide_bas` ne pouvait
   pas être atteint ; le banc VHDL génère ces adresses et atteint 100 %.
-- Pas d'assertions SVA dans les versions SystemVerilog et UVM (les assertions de protocole sont dans le banc VHDL).
+- Les assertions SVA sont vérifiées avec Verilator, mais pas encore branchées dans les bancs Vivado (SystemVerilog et UVM).
 - L'environnement UVM ne contient pas de classe de couverture fonctionnelle.
 - Le driver lance une seule transaction à la fois : une écriture et une lecture simultanées ne sont pas testées.
